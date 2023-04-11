@@ -1723,6 +1723,8 @@ func (engine *DockerTaskEngine) provisionContainerResources(task *apitask.Task, 
 	})
 	if task.IsNetworkModeAWSVPC() {
 		return engine.provisionContainerResourcesAwsvpc(task, container)
+	} else if task.IsNetworkModeBridge() && config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled() {
+		return engine.provisionContainerResourcesVpcBridge(task, container)
 	} else if task.IsNetworkModeBridge() {
 		return engine.provisionContainerResourcesBridgeMode(task, container)
 	}
@@ -1862,6 +1864,77 @@ func (engine *DockerTaskEngine) provisionContainerResourcesBridgeMode(task *apit
 	return dockerapi.MetadataFromContainer(containerInspectOutput)
 }
 
+func (engine *DockerTaskEngine) provisionContainerResourcesVpcBridge(task *apitask.Task, container *apicontainer.Container) dockerapi.DockerContainerMetadata {
+	logger.Debug("****************** VPC-BRIDGE PATH ENGAGED ******************")
+	logger.Debug("In agent/engine/docker_task_engine.go:1869")
+	containerInspectOutput, err := engine.inspectContainer(task, container)
+	if err != nil {
+		return dockerapi.DockerContainerMetadata{
+			Error: ContainerNetworkingError{
+				fromError: fmt.Errorf(
+					"container resource provisioning: cannot setup task network namespace due to error inspecting pause container: %+v", err),
+			},
+		}
+	}
+
+	logger.Debug(fmt.Sprintf("containerInspectOutput: %+v", containerInspectOutput), logger.Fields{
+		field.TaskID:    task.GetID(),
+		field.DockerId:  containerInspectOutput.ID,
+		field.Container: containerInspectOutput.Name,
+	})
+
+	cniConfig, err := engine.buildCNIConfigFromTaskContainerVpcBridge(task, containerInspectOutput, container.Name)
+	if err != nil {
+		return dockerapi.DockerContainerMetadata{
+			Error: ContainerNetworkingError{
+				fromError: fmt.Errorf(
+					"container resource provisioning: unable to build cni configuration, %+v", err),
+			},
+		}
+	}
+
+	logger.Info(fmt.Sprintf("Setting up CNI config for task, config: %+v", cniConfig), logger.Fields{
+		field.TaskID:        task.GetID(),
+		"cniContainerID":    cniConfig.ContainerID,
+		"cniPluginPath":     cniConfig.PluginsPath,
+		"cniID":             cniConfig.ID,
+		"cniBridgeName":     cniConfig.BridgeName,
+		"cniContainerNetNs": cniConfig.ContainerNetNS,
+	})
+
+	// Invoke the libcni to config the network namespace for the container
+	result, err := engine.cniClient.SetupNS(engine.ctx, cniConfig, cniSetupTimeout)
+	if err != nil {
+		logger.Error("Unable to configure pause container namespace", logger.Fields{
+			field.TaskID: task.GetID(),
+			field.Error:  err,
+		})
+		return dockerapi.DockerContainerMetadata{
+			DockerID: cniConfig.ContainerID,
+			Error: ContainerNetworkingError{fmt.Errorf(
+				"container resource provisioning: failed to setup network namespace: %+v", err)},
+		}
+	}
+
+	if result == nil {
+		logger.Error("Expect non-empty result from network namespace setup", logger.Fields{
+			field.TaskID: task.GetID(),
+		})
+		return dockerapi.DockerContainerMetadata{
+			DockerID: cniConfig.ContainerID,
+			Error: ContainerNetworkingError{fmt.Errorf(
+				"container resource provisioning: empty result from network namespace setup")},
+		}
+	}
+
+	logger.Info(fmt.Sprintf("Successfully configured pause netns, result: %+v", result), logger.Fields{
+		field.TaskID:    task.GetID(),
+		field.Container: container.Name,
+	})
+
+	return dockerapi.MetadataFromContainer(containerInspectOutput)
+}
+
 // checkTearDownPauseContainer idempotently tears down the pause container network when the pause container's known
 // or desired status is stopped.
 func (engine *DockerTaskEngine) checkTearDownPauseContainer(task *apitask.Task) {
@@ -1993,6 +2066,42 @@ func (engine *DockerTaskEngine) buildCNIConfigFromTaskContainerBridgeMode(
 	if err != nil {
 		return nil, errors.Wrapf(err, "engine: failed to build cni configuration from task")
 	}
+
+	return cniConfig, nil
+}
+
+// buildCNIConfigFromTaskContainerVpcBridgeMode builds a CNI config for the task
+// that is eventually destined to be use with the vpc-bridge plugin
+func (engine *DockerTaskEngine) buildCNIConfigFromTaskContainerVpcBridge(
+	task *apitask.Task,
+	containerInspectOutput *types.ContainerJSON,
+	containerName string,
+) (*ecscni.Config, error) {
+	logger.Debug("****************** VPC-BRIDGE PATH ENGAGED ******************")
+	logger.Debug("In agent/engine/docker_task_engine.go:2092")
+	containerPid := strconv.Itoa(containerInspectOutput.State.Pid)
+	cniConfig := &ecscni.Config{
+		MinSupportedCNIVersion: config.DefaultMinSupportedCNIVersion,
+		ContainerPID:           containerPid,
+		ContainerID:            containerInspectOutput.ID,
+	}
+
+	logger.Debug(fmt.Sprintf("cniConfig before: %+v", cniConfig), logger.Fields{
+		field.TaskID:    task.GetID(),
+		field.DockerId:  containerInspectOutput.ID,
+		field.Container: containerName,
+	})
+
+	cniConfig, err := task.BuildCNIConfigVpcBridge(cniConfig, containerName)
+	if err != nil {
+		return nil, errors.Wrapf(err, "engine: failed to build cni configuration from task")
+	}
+
+	logger.Debug(fmt.Sprintf("cniConfig after: %+v", cniConfig), logger.Fields{
+		field.TaskID:    task.GetID(),
+		field.DockerId:  containerInspectOutput.ID,
+		field.Container: containerName,
+	})
 
 	return cniConfig, nil
 }
