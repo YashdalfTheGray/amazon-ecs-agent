@@ -21,6 +21,7 @@ import (
 	"net"
 
 	"github.com/aws/amazon-ecs-agent/agent/api/serviceconnect"
+	"github.com/aws/amazon-ecs-agent/agent/ec2"
 
 	"github.com/aws/amazon-ecs-agent/agent/api/appmesh"
 	"github.com/aws/amazon-ecs-agent/agent/api/eni"
@@ -238,4 +239,41 @@ func NewServiceConnectNetworkConfig(
 		return "", nil, fmt.Errorf("NewServiceConnectNetworkConfig: construct the service connect network configuration failed: %w", err)
 	}
 	return defaultServiceConnectIfName, networkConfig, nil
+}
+
+func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.NetworkConfig, error) {
+	seelog.Debug("****************** VPC-BRIDGE PATH ENGAGED ******************")
+	seelog.Debug("In agent/ecscni/netconfig_linux.go:246")
+
+	ec2Metadata := ec2.NewEC2MetadataClient(nil)
+
+	linkName := eni.GetLinkName()
+	delegatedPrefix, err := ec2Metadata.EniIPPrefixList(eni.MacAddress)
+	if err != nil {
+		return "", nil, err
+	}
+
+	seelog.Debugf("linkName - %s | delegatedPrefix - %s", linkName, delegatedPrefix)
+
+	vpcBridgeNetConf := VpcBridgeConfig{
+		Name:             ECSVpcBridgePluginName,
+		Type:             ECSBridgePluginName,
+		EniName:          linkName,
+		EniMacAddress:    eni.MacAddress,
+		EniIPAddresses:   eni.GetIPAddressesWithPrefixLength(),
+		VPCCIDRs:         []string{eni.GetIPv4SubnetCIDRBlock()},
+		IPAddresses:      []string{delegatedPrefix},
+		GatewayIPAddress: eni.SubnetGatewayIPV4Address,
+	}
+
+	seelog.Debugf("%+v", vpcBridgeNetConf)
+
+	networkConfig, err := newNetworkConfig(vpcBridgeNetConf, ECSVpcBridgePluginName, cfg.MinSupportedCNIVersion)
+	if err != nil {
+		return "", nil, fmt.Errorf("NewVpcBridgeNetworkConfig: constructing the vpc-bridge network configuration failed: %w", err)
+	}
+
+	seelog.Debugf("%+v", networkConfig)
+
+	return linkName, networkConfig, nil
 }
