@@ -597,6 +597,7 @@ func environmentConfig() (Config, error) {
 		ShouldExcludeIPv6PortBinding:        parseBooleanDefaultTrueConfig("ECS_EXCLUDE_IPV6_PORTBINDING"),
 		WarmPoolsSupport:                    parseBooleanDefaultFalseConfig("ECS_WARM_POOLS_CHECK"),
 		DynamicHostPortRange:                parseDynamicHostPortRange("ECS_DYNAMIC_HOST_PORT_RANGE"),
+		ExperimentalEnableBridgeCniPlugin:   parseBooleanDefaultFalseConfig("ECS_LABS_ENABLE_BRIDGE_CNI_PLUGIN"),
 	}, err
 }
 
@@ -631,6 +632,7 @@ func (cfg *Config) String() string {
 			"TaskCPUMemLimit: %v, "+
 			"ShouldExcludeIPv6PortBinding: %v, "+
 			"DynamicHostPortRange: %v"+
+			"ExperimentalEnableBridgeCniPlugin: %v"+
 			"%s",
 		cfg.Cluster,
 		cfg.AWSRegion,
@@ -650,6 +652,7 @@ func (cfg *Config) String() string {
 		cfg.TaskCPUMemLimit,
 		cfg.ShouldExcludeIPv6PortBinding,
 		cfg.DynamicHostPortRange,
+		cfg.ExperimentalEnableBridgeCniPlugin,
 		cfg.platformString(),
 	)
 }

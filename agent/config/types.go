@@ -365,4 +365,9 @@ type Config struct {
 	// uses to assign host ports from, for a container port range mapping.
 	// This defaults to the platform specific ephemeral host port range
 	DynamicHostPortRange string
+
+	// EXPERIMENTAL - USE AT YOUR OWN RISK
+	// Enables using the vpc-bridge plugin to build bridge networks as an experiment
+	// rather than rely on Docker running containers in the docker0 bridge
+	ExperimentalEnableBridgeCniPlugin BooleanDefaultFalse
 }
