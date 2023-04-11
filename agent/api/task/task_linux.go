@@ -27,6 +27,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/agent/api/container/status"
+	"github.com/aws/amazon-ecs-agent/agent/api/eni"
 	apieni "github.com/aws/amazon-ecs-agent/agent/api/eni"
 	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
@@ -370,5 +371,41 @@ func (task *Task) BuildCNIConfigBridgeMode(cniConfig *ecscni.Config, containerNa
 	})
 
 	cniConfig.ContainerNetNS = fmt.Sprintf(ecscni.NetnsFormat, cniConfig.ContainerPID)
+	return cniConfig, nil
+}
+
+// BuildCNIConfigVpcBridge builds a list of CNI network configurations for the task.
+func (task *Task) BuildCNIConfigVpcBridge(cniConfig *ecscni.Config, containerName string) (*ecscni.Config, error) {
+	if !task.IsNetworkModeBridge() || !config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled() {
+		return nil, errors.New("task config: task network mode is not bridge or the experimental plugin is not enabled")
+	}
+
+	seelog.Debug("****************** VPC-BRIDGE PATH ENGAGED ******************")
+	seelog.Debug("In agent/api/task/task_linux.go:384")
+
+	eni, err := eni.PrimaryENIFromIMDS()
+	if err != nil {
+		return nil, err
+	}
+
+	seelog.Debugf("%+v", eni)
+
+	ifname, netconf, err := ecscni.NewVpcBridgeNetworkConfig(eni, cniConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	seelog.Debugf("ifname - %s", ifname)
+	seelog.Debugf("%+v", netconf)
+
+	cniConfig.NetworkConfigs = append(cniConfig.NetworkConfigs, &ecscni.NetworkConfig{
+		IfName:           ifname,
+		CNINetworkConfig: netconf,
+	})
+
+	cniConfig.ContainerNetNS = fmt.Sprintf(ecscni.NetnsFormat, cniConfig.ContainerPID)
+
+	seelog.Debugf("%+v", cniConfig)
+
 	return cniConfig, nil
 }
