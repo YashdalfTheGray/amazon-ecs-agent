@@ -1407,6 +1407,8 @@ func (task *Task) addNetworkResourceProvisioningDependency(cfg *config.Config) e
 		return task.addNetworkResourceProvisioningDependencyAwsvpc(cfg)
 	} else if task.IsNetworkModeBridge() && task.IsServiceConnectEnabled() {
 		return task.addNetworkResourceProvisioningDependencyServiceConnectBridge(cfg)
+	} else if task.IsNetworkModeBridge() && config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled() {
+		return task.addNetworkResourceProvisioningDependencyVpcBridge(cfg)
 	}
 	return nil
 }
@@ -1517,6 +1519,43 @@ func (task *Task) addNetworkResourceProvisioningDependencyServiceConnectBridge(c
 			continue
 		}
 		container.BuildContainerDependency(scPauseContainer.Name, apicontainerstatus.ContainerRunning, apicontainerstatus.ContainerResourcesProvisioned)
+	}
+	return nil
+}
+
+func (task *Task) addNetworkResourceProvisioningDependencyVpcBridge(cfg *config.Config) error {
+	logger.Debug("****************** VPC-BRIDGE PATH ENGAGED ******************")
+	logger.Debug("In agent/api/task/task.go:1528")
+
+	pauseContainer := apicontainer.NewContainerWithSteadyState(apicontainerstatus.ContainerResourcesProvisioned)
+	pauseContainer.TransitionDependenciesMap = make(map[apicontainerstatus.ContainerStatus]apicontainer.TransitionDependencySet)
+	pauseContainer.Name = NetworkPauseContainerName
+	pauseContainer.Image = fmt.Sprintf("%s:%s", cfg.PauseContainerImageName, cfg.PauseContainerTag)
+	pauseContainer.Essential = true
+	pauseContainer.Type = apicontainer.ContainerCNIPause
+
+	task.Containers = append(task.Containers, pauseContainer)
+
+	logger.Debug(fmt.Sprintf("Setting up pause container: %+v", pauseContainer), logger.Fields{
+		field.TaskID: task.GetID(),
+	})
+
+	for _, container := range task.Containers {
+		if container.IsInternal() {
+			continue
+		}
+		container.BuildContainerDependency(NetworkPauseContainerName, apicontainerstatus.ContainerResourcesProvisioned, apicontainerstatus.ContainerPulled)
+		pauseContainer.BuildContainerDependency(container.Name, apicontainerstatus.ContainerStopped, apicontainerstatus.ContainerStopped)
+	}
+
+	for _, resource := range task.GetResources() {
+		if resource.DependOnTaskNetwork() {
+			logger.Debug("Adding network pause container dependency to resource", logger.Fields{
+				field.TaskID:   task.GetID(),
+				field.Resource: resource.GetName(),
+			})
+			resource.BuildContainerDependency(NetworkPauseContainerName, apicontainerstatus.ContainerResourcesProvisioned, resourcestatus.ResourceStatus(taskresourcevolume.VolumeCreated))
+		}
 	}
 	return nil
 }
