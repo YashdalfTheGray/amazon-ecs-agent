@@ -88,3 +88,23 @@ func (blackholeMetadataClient) OutpostARN() (string, error) {
 func (blackholeMetadataClient) TargetLifecycleState() (string, error) {
 	return "", errors.New("blackholed")
 }
+
+func (blackholeMetadataClient) PrimaryENIID(mac string) (string, error) {
+	return "", errors.New("blackholed")
+}
+
+func (blackholeMetadataClient) IPv6Address() (string, error) {
+	return "", errors.New("blackholed")
+}
+
+func (blackholeMetadataClient) PrivateENIHostName(mac string) (string, error) {
+	return "", errors.New("blackholed")
+}
+
+func (blackholeMetadataClient) SubnetIPv4CIDRBlock(mac string) (string, error) {
+	return "", errors.New("blackholed")
+}
+
+func (blackholeMetadataClient) EniIPPrefixList(mac string) (string, error) {
+	return "", errors.New("blackholed")
+}

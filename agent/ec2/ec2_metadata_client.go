@@ -41,6 +41,11 @@ const (
 	OutpostARN                                = "outpost-arn"
 	PrimaryIPV4VPCCIDRResourceFormat          = "network/interfaces/macs/%s/vpc-ipv4-cidr-block"
 	TargetLifecycleState                      = "autoscaling/target-lifecycle-state"
+	PrimaryENIIDResource                      = "network/interfaces/macs/%s/interface-id"
+	IPv6Resource                              = "ipv6"
+	PrivateENIHostNameResource                = "network/interfaces/macs/%s/local-hostname"
+	SubnetIPv4CIDRBlockResource               = "network/interfaces/macs/%s/subnet-ipv4-cidr-block"
+	EniIPPrefixListResource                   = "network/interfaces/macs/%s/ipv4-prefix"
 )
 
 const (
@@ -84,6 +89,11 @@ type EC2MetadataClient interface {
 	SpotInstanceAction() (string, error)
 	OutpostARN() (string, error)
 	TargetLifecycleState() (string, error)
+	PrimaryENIID(mac string) (string, error)
+	IPv6Address() (string, error)
+	PrivateENIHostName(mac string) (string, error)
+	SubnetIPv4CIDRBlock(mac string) (string, error)
+	EniIPPrefixList(mac string) (string, error)
 }
 
 type ec2MetadataClientImpl struct {
@@ -208,4 +218,29 @@ func (c *ec2MetadataClientImpl) OutpostARN() (string, error) {
 
 func (c *ec2MetadataClientImpl) TargetLifecycleState() (string, error) {
 	return c.client.GetMetadata(TargetLifecycleState)
+}
+
+// PrimaryENIID returns the ENI ID of the primary network interface
+func (c *ec2MetadataClientImpl) PrimaryENIID(mac string) (string, error) {
+	return c.client.GetMetadata(fmt.Sprintf(PrimaryENIIDResource, mac))
+}
+
+// PrivateIPv4Address returns the private IPv4 of this instance
+func (c *ec2MetadataClientImpl) IPv6Address() (string, error) {
+	return c.client.GetMetadata(IPv6Resource)
+}
+
+// PrivateENIHostName returns the private DNS name for the ENI
+func (c *ec2MetadataClientImpl) PrivateENIHostName(mac string) (string, error) {
+	return c.client.GetMetadata(fmt.Sprintf(PrivateENIHostNameResource, mac))
+}
+
+// SubnetIPv4CIDRBlock returns the subnet CIDR block of the provided interface
+func (c *ec2MetadataClientImpl) SubnetIPv4CIDRBlock(mac string) (string, error) {
+	return c.client.GetMetadata(fmt.Sprintf(SubnetIPv4CIDRBlockResource, mac))
+}
+
+// EniIPPrefixList returns the prefix that has been delegated to the ENI
+func (c *ec2MetadataClientImpl) EniIPPrefixList(mac string) (string, error) {
+	return c.client.GetMetadata(fmt.Sprintf(EniIPPrefixListResource, mac))
 }
