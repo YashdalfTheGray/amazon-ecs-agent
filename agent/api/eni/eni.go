@@ -22,6 +22,7 @@ import (
 	"github.com/cihub/seelog"
 
 	"github.com/aws/amazon-ecs-agent/agent/acs/model/ecsacs"
+	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/pkg/errors"
 )
@@ -379,4 +380,94 @@ func ValidateTaskENI(acsENI *ecsacs.ElasticNetworkInterface) error {
 	}
 
 	return nil
+}
+
+// PrimaryENIFromIMDS returns an ENI struct that is constructed based on the interface specified
+// by the mac address that IMDS recognizes as "primary". IMDS defines this as the mac address of
+// the eth0 interface. So we get that via the /meta-data/mac endpoint and then we ask IMDS for
+// other details using /meta-data/network/interfaces/macs/<mac>/... endpoints
+//
+// Note: this is not portable because it relies on IMDS, which is unlikely to work for instances
+// that are not running within EC2. There might be other cases where this doesn't work either,
+// but for the purposes of a proof of concept, we'll move forward with this.
+func PrimaryENIFromIMDS() (*ENI, error) {
+	ec2Metadata := ec2.NewEC2MetadataClient(nil)
+	seelog.Debug("****************** VPC-BRIDGE PATH ENGAGED ******************")
+	seelog.Debug("In agent/api/eni/eni.go:396")
+
+	eniMac, err := ec2Metadata.PrimaryENIMAC()
+	if err != nil {
+		return nil, err
+	}
+
+	eniId, err := ec2Metadata.PrimaryENIID(eniMac)
+	if err != nil || eniId == "" {
+		return nil, err
+	}
+
+	var ipv4Addrs []*ENIIPV4Address
+	var ipv6Addrs []*ENIIPV6Address
+
+	ipv4Addr, ipv4Err := ec2Metadata.PrivateIPv4Address()
+	ipv6Addr, ipv6Err := ec2Metadata.IPv6Address()
+
+	if ipv4Err != nil && ipv6Err != nil {
+		return nil, errors.New("No primary IP address assigned to instance")
+	}
+
+	if ipv4Err == nil {
+		primary := true
+		ipv4Addrs = append(ipv4Addrs, &ENIIPV4Address{
+			Primary: aws.BoolValue(&primary),
+			Address: aws.StringValue(&ipv4Addr),
+		})
+	}
+
+	if ipv6Err == nil {
+		ipv6Addrs = append(ipv6Addrs, &ENIIPV6Address{
+			Address: aws.StringValue(&ipv6Addr),
+		})
+	}
+
+	subnetIpv4CidrBlock, err := ec2Metadata.SubnetIPv4CIDRBlock(eniMac)
+	if err != nil {
+		return nil, err
+	}
+	// SubnetGatewayAddress is not quite the gateway address yet, let's take
+	// an example, assume that the subnet CIDR block returned from above was
+	// 10.0.1.0/24. The return value of the function below would then be
+	// (10.0.1.0, 10.0.1.0/24, nil) but 10.0.1.0 is actually the subnet network
+	// address rather than the gateway address, the gateway address would, by
+	// convention here be 10.0.1.1. So next we are going to increment the last
+	// byte of the network address by 1 to build the gateway address.
+	subnetGatewayAddr, subnetNetwork, err := net.ParseCIDR(subnetIpv4CidrBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	subnetGatewayAddr[len(subnetGatewayAddr)-1] += 1
+	cidrBits := strings.Split(subnetNetwork.String(), "/")[1]
+	subnetGatewayWithCidr := fmt.Sprintf("%s/%s", subnetGatewayAddr, cidrBits)
+
+	privateHostName, err := ec2Metadata.PrivateENIHostName(eniMac)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultInterfaceAssociation := DefaultInterfaceAssociationProtocol
+
+	eni := &ENI{
+		ID:                           aws.StringValue(&eniId),
+		MacAddress:                   aws.StringValue(&eniMac),
+		IPV4Addresses:                ipv4Addrs,
+		IPV6Addresses:                ipv6Addrs,
+		SubnetGatewayIPV4Address:     aws.StringValue(&subnetGatewayWithCidr),
+		PrivateDNSName:               aws.StringValue(&privateHostName),
+		InterfaceAssociationProtocol: aws.StringValue(&defaultInterfaceAssociation),
+		InterfaceVlanProperties:      nil,
+	}
+
+	seelog.Debugf("%+v", eni)
+
+	return eni, nil
 }
