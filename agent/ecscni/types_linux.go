@@ -46,6 +46,8 @@ const (
 	ECSBranchENIPluginName = "vpc-branch-eni"
 	// ECSServiceConnectPluginName is the binary of the service connect plugin
 	ECSServiceConnectPluginName = "ecs-serviceconnect"
+	// ECSVpcBridgePluginName is the name of the binary of the vpc-bridge plugin
+	ECSVpcBridgePluginName = "vpc-bridge"
 	// NetnsFormat is used to construct the path to cotainer network namespace
 	NetnsFormat = "/host/proc/%s/ns/net"
 	// Starting with CNI plugin v0.8.0 (this PR https://github.com/containernetworking/cni/pull/698)
@@ -222,4 +224,36 @@ type RedirectIPJson struct {
 type VIPConfigJSON struct {
 	IPv4CIDR string `json:"ipv4Cidr,omitempty"`
 	IPv6CIDR string `json:"ipv6Cidr,omitempty"`
+}
+
+type VpcBridgeConfig struct {
+	// CNIVersion is the CNI spec version to use
+	CNIVersion string `json:"cniVersion,omitempty"`
+	// Name is the CNI network name
+	Name string `json:"name,omitempty"`
+	// Type is the CNI plugin name
+	Type string `json:"type,omitempty"`
+	// EniName is the name of the ENI to use for the bridge
+	EniName string `json:"eniName,omitempty"`
+	// EniMacAddress is the address of the ENI
+	EniMacAddress string `json:"eniMacAddress,omitempty"`
+	// EniIPAddresses are the IP addresses assigned to the ENI
+	EniIPAddresses []string `json:"eniIPAddresses"`
+	// VPCCIDRs are the CIDR blocks assigned to the VPC
+	VPCCIDRs []string `json:"vpcCIDRs"`
+	// BridgeType is one of "L2" or "L3", defaults to "L3"
+	BridgeType string `json:"bridgeType"`
+	// BridgeNetNSPath is the namespace that the vpc-bridge
+	// will be created in, "" by default
+	BridgeNetNSPath string `json:"bridgeNetNSPath"`
+	// IPAddresses are the addresses that will be assigned to the
+	// other end of the veth pair connected to the bridge
+	IPAddresses []string `json:"ipAddresses"`
+	// GatewayIPAddres is the address of the gateway, likely the
+	// gateway of the subnet that this ENI exists in
+	GatewayIPAddress string `json:"gatewayIPAddress"`
+	// InterfaceType is one of "veth" or "tap", defaults to "veth"
+	InterfaceType string `json:"interfaceType"`
+	// TapUserID is the ID of the linux user that owns the tap interface
+	TapUserID string `json:"tapUserID"`
 }
