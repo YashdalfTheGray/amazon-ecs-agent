@@ -105,6 +105,7 @@ func DefaultConfig() Config {
 		RuntimeStatsLogFile:                 defaultRuntimeStatsLogFile,
 		EnableRuntimeStats:                  BooleanDefaultFalse{Value: NotSet},
 		ShouldExcludeIPv6PortBinding:        BooleanDefaultTrue{Value: ExplicitlyEnabled},
+		ExperimentalEnableBridgeCniPlugin:   BooleanDefaultFalse{Value: ExplicitlyEnabled},
 	}
 }
 

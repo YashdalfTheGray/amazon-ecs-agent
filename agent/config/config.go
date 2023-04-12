@@ -631,7 +631,7 @@ func (cfg *Config) String() string {
 			"DependentContainersPullUpfront: %v, "+
 			"TaskCPUMemLimit: %v, "+
 			"ShouldExcludeIPv6PortBinding: %v, "+
-			"DynamicHostPortRange: %v"+
+			"DynamicHostPortRange: %v, "+
 			"ExperimentalEnableBridgeCniPlugin: %v"+
 			"%s",
 		cfg.Cluster,

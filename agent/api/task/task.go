@@ -359,6 +359,9 @@ func (task *Task) initializeVolumes(cfg *config.Config, dockerClient dockerapi.D
 func (task *Task) PostUnmarshalTask(cfg *config.Config,
 	credentialsManager credentials.Manager, resourceFields *taskresource.ResourceFields,
 	dockerClient dockerapi.DockerClient, ctx context.Context, options ...Option) error {
+	logger.Debug("POST UNMARSHAL TASK CALLED", logger.Fields{
+		"config": fmt.Sprintf("%+v", cfg),
+	})
 
 	task.adjustForPlatform(cfg)
 
@@ -1403,11 +1406,19 @@ func (task *Task) IsNetworkModeHost() bool {
 }
 
 func (task *Task) addNetworkResourceProvisioningDependency(cfg *config.Config) error {
+	logger.Debug("Trying to add network resource provisioning dependency", logger.Fields{
+		field.NetworkMode:    task.NetworkMode,
+		"isBridgeMode":       task.IsNetworkModeBridge(),
+		"isVpcBridgeEnabled": config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled(),
+		"enableConfig":       config.DefaultConfig(),
+	})
 	if task.IsNetworkModeAWSVPC() {
 		return task.addNetworkResourceProvisioningDependencyAwsvpc(cfg)
 	} else if task.IsNetworkModeBridge() && task.IsServiceConnectEnabled() {
 		return task.addNetworkResourceProvisioningDependencyServiceConnectBridge(cfg)
 	} else if task.IsNetworkModeBridge() && config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled() {
+		logger.Debug("****************** VPC-BRIDGE PATH ENGAGED ******************")
+		logger.Debug("In agent/api/task/task.go:1412")
 		return task.addNetworkResourceProvisioningDependencyVpcBridge(cfg)
 	}
 	return nil
