@@ -257,7 +257,7 @@ func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.Netwo
 
 	vpcBridgeNetConf := VpcBridgeConfig{
 		Name:             ECSVpcBridgePluginName,
-		Type:             ECSBridgePluginName,
+		Type:             ECSVpcBridgePluginName,
 		EniName:          linkName,
 		EniMacAddress:    eni.MacAddress,
 		EniIPAddresses:   eni.GetIPAddressesWithPrefixLength(),
@@ -268,7 +268,7 @@ func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.Netwo
 
 	seelog.Debugf("%+v", vpcBridgeNetConf)
 
-	networkConfig, err := newNetworkConfig(vpcBridgeNetConf, ECSVpcBridgePluginName, cfg.MinSupportedCNIVersion)
+	networkConfig, err := newNetworkConfigWithName(vpcBridgeNetConf, ECSVpcBridgePluginName, cfg.MinSupportedCNIVersion, "net")
 	if err != nil {
 		return "", nil, fmt.Errorf("NewVpcBridgeNetworkConfig: constructing the vpc-bridge network configuration failed: %w", err)
 	}

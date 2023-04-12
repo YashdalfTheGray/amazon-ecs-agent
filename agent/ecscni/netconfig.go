@@ -45,3 +45,27 @@ func newNetworkConfig(netcfg interface{}, plugin string, cniVersion string) (*li
 
 	return netConfig, nil
 }
+
+// newNetworkConfigWithName converts a network config to libcni's NetworkConfig.
+func newNetworkConfigWithName(netcfg interface{}, plugin, cniVersion, networkName string) (*libcni.NetworkConfig, error) {
+	configBytes, err := json.Marshal(netcfg)
+	if err != nil {
+		logger.Error("[ECSCNI] Marshal configuration failed", logger.Fields{
+			"netcfg":     netcfg,
+			"plugin":     plugin,
+			"cniVersion": cniVersion,
+		})
+		return nil, err
+	}
+
+	netConfig := &libcni.NetworkConfig{
+		Network: &cnitypes.NetConf{
+			Type:       plugin,
+			CNIVersion: cniVersion,
+			Name:       networkName,
+		},
+		Bytes: configBytes,
+	}
+
+	return netConfig, nil
+}
