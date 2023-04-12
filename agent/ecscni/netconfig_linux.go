@@ -263,7 +263,7 @@ func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.Netwo
 		EniIPAddresses:   eni.GetIPAddressesWithPrefixLength(),
 		VPCCIDRs:         []string{eni.GetIPv4SubnetCIDRBlock()},
 		IPAddresses:      []string{delegatedPrefix},
-		GatewayIPAddress: eni.SubnetGatewayIPV4Address,
+		GatewayIPAddress: eni.GetSubnetGatewayIPv4Address(),
 	}
 
 	seelog.Debugf("%+v", vpcBridgeNetConf)
