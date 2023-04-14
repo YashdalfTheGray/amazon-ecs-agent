@@ -252,6 +252,15 @@ func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.Netwo
 	if err != nil {
 		return "", nil, err
 	}
+	ipAddr, ipNet, err := net.ParseCIDR(delegatedPrefix)
+	if err != nil {
+		return "", nil, err
+	}
+	ipAddr[len(ipAddr)-1] += 1
+	maskBits, _ := ipNet.Mask.Size()
+	// above returns (ones int, bits int), ones being the current
+	// number of 1 bits in the mask and bits being the total
+	// number of bits in the mask, which for ipv4 is 32, nearly always
 
 	seelog.Debugf("linkName - %s | delegatedPrefix - %s", linkName, delegatedPrefix)
 
@@ -262,7 +271,7 @@ func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.Netwo
 		EniMacAddress:    eni.MacAddress,
 		EniIPAddresses:   eni.GetIPAddressesWithPrefixLength(),
 		VPCCIDRs:         []string{eni.GetIPv4SubnetCIDRBlock()},
-		IPAddresses:      []string{delegatedPrefix},
+		IPAddresses:      []string{fmt.Sprintf("%s/%d", ipAddr.String(), maskBits)},
 		GatewayIPAddress: eni.GetSubnetGatewayIPv4Address(),
 	}
 
