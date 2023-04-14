@@ -1976,6 +1976,8 @@ func (engine *DockerTaskEngine) cleanupPauseContainerNetwork(task *apitask.Task,
 	var cniConfig *ecscni.Config
 	if task.IsNetworkModeAWSVPC() {
 		cniConfig, err = engine.buildCNIConfigFromTaskContainerAwsvpc(task, containerInspectOutput, false)
+	} else if task.IsNetworkModeBridge() && config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled() {
+		cniConfig, err = engine.buildCNIConfigFromTaskContainerVpcBridge(task, containerInspectOutput, container.Name)
 	} else if task.IsNetworkModeBridge() && task.IsServiceConnectEnabled() {
 		cniConfig, err = engine.buildCNIConfigFromTaskContainerBridgeMode(task, containerInspectOutput, container.Name)
 	} else {

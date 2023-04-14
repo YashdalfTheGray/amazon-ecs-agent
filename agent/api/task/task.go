@@ -2052,6 +2052,8 @@ func (task *Task) shouldOverrideNetworkMode(container *apicontainer.Container, d
 		if container.Type == apicontainer.ContainerCNIPause {
 			if task.IsNetworkModeAWSVPC() {
 				return true, networkModeNone
+			} else if task.IsNetworkModeBridge() && config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled() {
+				return true, networkModeNone
 			} else if task.IsNetworkModeBridge() && task.IsServiceConnectEnabled() {
 				return true, BridgeNetworkMode
 			}
@@ -2069,6 +2071,8 @@ func (task *Task) shouldOverrideNetworkMode(container *apicontainer.Container, d
 	// network drivers
 	if task.IsNetworkModeAWSVPC() {
 		return task.shouldOverrideNetworkModeAwsvpc(container, dockerContainerMap)
+	} else if task.IsNetworkModeBridge() && config.DefaultConfig().ExperimentalEnableBridgeCniPlugin.Enabled() {
+		return task.shouldOverrideNetworkModeVpcBridge(container, dockerContainerMap)
 	} else if task.IsNetworkModeBridge() && task.IsServiceConnectEnabled() {
 		return task.shouldOverrideNetworkModeServiceConnectBridge(container, dockerContainerMap)
 	}
@@ -2127,6 +2131,32 @@ func (task *Task) shouldOverrideNetworkModeServiceConnectBridge(container *apico
 		return false, ""
 	}
 	return true, dockerMappingContainerPrefix + dockerPauseContainer.DockerID
+}
+
+func (task *Task) shouldOverrideNetworkModeVpcBridge(container *apicontainer.Container, dockerContainerMap map[string]*apicontainer.DockerContainer) (bool, string) {
+	pauseContName := ""
+	for _, cont := range task.Containers {
+		if cont.Type == apicontainer.ContainerCNIPause {
+			pauseContName = cont.Name
+			break
+		}
+	}
+	if pauseContName == "" {
+		logger.Critical("Pause container required, but not found in the task", logger.Fields{
+			field.TaskID: task.GetID(),
+		})
+		return false, ""
+	}
+	pauseContainer, ok := dockerContainerMap[pauseContName]
+	if !ok || pauseContainer == nil {
+		// This should never be the case and implies a code-bug.
+		logger.Critical("Pause container required, but not found in container map", logger.Fields{
+			field.TaskID:    task.GetID(),
+			field.Container: container.Name,
+		})
+		return false, ""
+	}
+	return true, dockerMappingContainerPrefix + pauseContainer.DockerID
 }
 
 // overrideDNS overrides a container's host config if the following conditions are
