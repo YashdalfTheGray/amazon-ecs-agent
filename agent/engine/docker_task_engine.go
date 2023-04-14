@@ -1916,17 +1916,6 @@ func (engine *DockerTaskEngine) provisionContainerResourcesVpcBridge(task *apita
 		}
 	}
 
-	if result == nil {
-		logger.Error("Expect non-empty result from network namespace setup", logger.Fields{
-			field.TaskID: task.GetID(),
-		})
-		return dockerapi.DockerContainerMetadata{
-			DockerID: cniConfig.ContainerID,
-			Error: ContainerNetworkingError{fmt.Errorf(
-				"container resource provisioning: empty result from network namespace setup")},
-		}
-	}
-
 	logger.Info(fmt.Sprintf("Successfully configured pause netns, result: %+v", result), logger.Fields{
 		field.TaskID:    task.GetID(),
 		field.Container: container.Name,
