@@ -248,21 +248,36 @@ func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.Netwo
 	ec2Metadata := ec2.NewEC2MetadataClient(nil)
 
 	linkName := eni.GetLinkName()
-	delegatedPrefix, err := ec2Metadata.EniIPPrefixList(eni.MacAddress)
+
+	delegatedIpv4Prefix, err := ec2Metadata.EniIPv4PrefixList(eni.MacAddress)
 	if err != nil {
 		return "", nil, err
 	}
-	ipAddr, ipNet, err := net.ParseCIDR(delegatedPrefix)
+	ipv4Addr, ipv4Net, err := net.ParseCIDR(delegatedIpv4Prefix)
 	if err != nil {
 		return "", nil, err
 	}
-	ipAddr[len(ipAddr)-1] += 1
-	maskBits, _ := ipNet.Mask.Size()
+	ipv4Addr[len(ipv4Addr)-1] += 1
+	v4maskBits, _ := ipv4Net.Mask.Size()
 	// above returns (ones int, bits int), ones being the current
 	// number of 1 bits in the mask and bits being the total
 	// number of bits in the mask, which for ipv4 is 32, nearly always
 
-	seelog.Debugf("linkName - %s | delegatedPrefix - %s", linkName, delegatedPrefix)
+	delegatedIpv6Prefix, err := ec2Metadata.EniIPv6PrefixList(eni.MacAddress)
+	if err != nil {
+		return "", nil, err
+	}
+	ipv6Addr, ipv6Net, err := net.ParseCIDR(delegatedIpv6Prefix)
+	if err != nil {
+		return "", nil, err
+	}
+	ipv6Addr[len(ipv6Addr)-1] += 1
+	v6maskBits, _ := ipv6Net.Mask.Size()
+	// above returns (ones int, bits int), ones being the current
+	// number of 1 bits in the mask and bits being the total
+	// number of bits in the mask, which for ipv6 is 128, nearly always
+
+	seelog.Debugf("linkName - %s | delegatedIpv4Prefix - %s | delegatedIpv6Prefix - %s", linkName, delegatedIpv4Prefix, delegatedIpv6Prefix)
 
 	vpcBridgeNetConf := VpcBridgeConfig{
 		Name:             ECSVpcBridgePluginName,
@@ -270,9 +285,13 @@ func NewVpcBridgeNetworkConfig(eni *eni.ENI, cfg *Config) (string, *libcni.Netwo
 		EniName:          linkName,
 		EniMacAddress:    eni.MacAddress,
 		EniIPAddresses:   eni.GetIPAddressesWithPrefixLength(),
-		VPCCIDRs:         []string{eni.GetIPv4SubnetCIDRBlock()},
-		IPAddresses:      []string{fmt.Sprintf("%s/%d", ipAddr.String(), maskBits)},
+		VPCCIDRs:         []string{eni.GetIPv4SubnetCIDRBlock(), eni.GetIPv6SubnetCIDRBlock()},
 		GatewayIPAddress: eni.GetSubnetGatewayIPv4Address(),
+
+		IPAddresses: []string{
+			fmt.Sprintf("%s/%d", ipv4Addr.String(), v4maskBits),
+			fmt.Sprintf("%s/%d", ipv6Addr.String(), v6maskBits),
+		},
 	}
 
 	seelog.Debugf("%+v", vpcBridgeNetConf)

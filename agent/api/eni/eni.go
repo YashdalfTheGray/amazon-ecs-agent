@@ -42,6 +42,8 @@ type ENI struct {
 	IPV6Addresses []*ENIIPV6Address
 	// SubnetGatewayIPV4Address is the IPv4 address of the subnet gateway of the ENI
 	SubnetGatewayIPV4Address string `json:",omitempty"`
+	// SubnetGatewayIPV6Address is the IPv4 address of the subnet gateway of the ENI
+	SubnetGatewayIPV6Address string `json:",omitempty"`
 	// DomainNameServers specifies the nameserver IP addresses for the eni
 	DomainNameServers []string `json:",omitempty"`
 	// DomainNameSearchList specifies the search list for the domain
@@ -186,6 +188,16 @@ func (eni *ENI) GetSubnetGatewayIPv4Address() string {
 	var gwAddr string
 	if eni.SubnetGatewayIPV4Address != "" {
 		gwAddr = strings.Split(eni.SubnetGatewayIPV4Address, "/")[0]
+	}
+
+	return gwAddr
+}
+
+// GetSubnetGatewayIPv6Address returns the subnet gateway IPv6 address for the ENI.
+func (eni *ENI) GetSubnetGatewayIPv6Address() string {
+	var gwAddr string
+	if eni.SubnetGatewayIPV6Address != "" {
+		gwAddr = strings.Split(eni.SubnetGatewayIPV6Address, "/")[0]
 	}
 
 	return gwAddr
@@ -440,14 +452,28 @@ func PrimaryENIFromIMDS() (*ENI, error) {
 	// address rather than the gateway address, the gateway address would, by
 	// convention here be 10.0.1.1. So next we are going to increment the last
 	// byte of the network address by 1 to build the gateway address.
-	subnetGatewayAddr, subnetNetwork, err := net.ParseCIDR(subnetIpv4CidrBlock)
+	subnetGatewayIpv4Addr, subnetNetworkIpv4, err := net.ParseCIDR(subnetIpv4CidrBlock)
 	if err != nil {
 		return nil, err
 	}
 
-	subnetGatewayAddr[len(subnetGatewayAddr)-1] += 1
-	cidrBits := strings.Split(subnetNetwork.String(), "/")[1]
-	subnetGatewayWithCidr := fmt.Sprintf("%s/%s", subnetGatewayAddr, cidrBits)
+	subnetGatewayIpv4Addr[len(subnetGatewayIpv4Addr)-1] += 1
+	ipv4CidrBits := strings.Split(subnetNetworkIpv4.String(), "/")[1]
+	ipv4SubnetGatewayWithCidr := fmt.Sprintf("%s/%s", subnetGatewayIpv4Addr, ipv4CidrBits)
+
+	subnetIpv6CidrBlock, err := ec2Metadata.SubnetIPv6CIDRBlock(eniMac)
+	if err != nil {
+		return nil, err
+	}
+
+	subnetGatewayIpv6Addr, subnetNetworkIpv6, err := net.ParseCIDR(subnetIpv6CidrBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	subnetGatewayIpv6Addr[len(subnetGatewayIpv6Addr)-1] += 1
+	ipv6CidrBits := strings.Split(subnetNetworkIpv6.String(), "/")[1]
+	ipv6SubnetGatewayWithCidr := fmt.Sprintf("%s/%s", subnetGatewayIpv6Addr, ipv6CidrBits)
 
 	privateHostName, err := ec2Metadata.PrivateENIHostName(eniMac)
 	if err != nil {
@@ -461,7 +487,8 @@ func PrimaryENIFromIMDS() (*ENI, error) {
 		MacAddress:                   aws.StringValue(&eniMac),
 		IPV4Addresses:                ipv4Addrs,
 		IPV6Addresses:                ipv6Addrs,
-		SubnetGatewayIPV4Address:     aws.StringValue(&subnetGatewayWithCidr),
+		SubnetGatewayIPV4Address:     aws.StringValue(&ipv4SubnetGatewayWithCidr),
+		SubnetGatewayIPV6Address:     aws.StringValue(&ipv6SubnetGatewayWithCidr),
 		PrivateDNSName:               aws.StringValue(&privateHostName),
 		InterfaceAssociationProtocol: aws.StringValue(&defaultInterfaceAssociation),
 		InterfaceVlanProperties:      nil,
